@@ -13,10 +13,11 @@ import Lia.Markdown.Inline.View exposing (view_inf)
 import Lia.Markdown.View as Markdown
 import Lia.Model exposing (Model)
 import Lia.Section exposing (SubSection)
-import Lia.Settings.Model exposing (Mode(..))
+import Lia.Settings.Model as Setting exposing (Mode(..))
 import Lia.Settings.Update exposing (toggle_sound)
 import Lia.Settings.View as Settings
 import Lia.Update exposing (Msg(..), get_active_section)
+import Port.Event exposing (Event)
 import Port.Share exposing (share)
 import Session exposing (Screen)
 import Translations as Trans exposing (Lang)
@@ -33,18 +34,26 @@ import Translations as Trans exposing (Lang)
 -}
 view : Screen -> Bool -> Bool -> Model -> Html Msg
 view screen hasShareAPI hasIndex model =
+    let
+        sharing =
+            if hasShareAPI then
+                Just <| share model.title (stringify model.definition.comment) model.url
+
+            else
+                Nothing
+    in
     Html.div
         (Settings.design model.settings)
-        [ view_aside hasShareAPI model
-        , view_article screen hasIndex model
+        [ view_aside sharing model
+        , view_article sharing screen hasIndex model
         ]
 
 
 {-| **@private:** Display the aside section that contains the document search,
 table of contents and settings.
 -}
-view_aside : Bool -> Model -> Html Msg
-view_aside hasShareAPI model =
+view_aside : Maybe Event -> Model -> Html Msg
+view_aside sharing model =
     Html.aside
         [ Attr.class "lia-toc"
         , Attr.style "max-width" <|
@@ -66,12 +75,7 @@ view_aside hasShareAPI model =
                 model.url
                 model.origin
                 model.translation
-                (if hasShareAPI then
-                    Just <| share model.title (stringify model.definition.comment) model.url
-
-                 else
-                    Nothing
-                )
+                sharing
             |> Html.map UpdateSettings
         ]
 
@@ -79,8 +83,8 @@ view_aside hasShareAPI model =
 {-| **@private:** show the current section, with navigation on top as well as a
 footer, if it is required by the current display mode.
 -}
-view_article : Screen -> Bool -> Model -> Html Msg
-view_article screen hasIndex model =
+view_article : Maybe Event -> Screen -> Bool -> Model -> Html Msg
+view_article sharing screen hasIndex model =
     case get_active_section model of
         Just section ->
             Html.article [ Attr.class "lia-slide" ]
@@ -88,11 +92,11 @@ view_article screen hasIndex model =
                     |> .effect_model
                     |> state
                     |> view_nav
-                        model.section_active
-                        hasIndex
-                        model.settings.mode
+                        sharing
                         model.translation
-                        model.settings.speaking
+                        hasIndex
+                        model.settings
+                        model.section_active
                 , Config.init
                     model.settings.mode
                     section
@@ -166,17 +170,16 @@ navButton str title id msg =
 
 {-| **@private:** the navigation abr:
 
-1.  `section_active`: section id to display
-2.  `hasIndex`: display home/index button
-3.  `mode`: to define the rendering type
-4.  `lang`: used for translations
-5.  `speaking`: underlines the section number, to indicate if the text2speech
-    output is currently active
+1.  `sharing`: if the share-API is available, then release this event
+2.  `lang`: used for translations
+3.  `hasIndex`: display home/index button
+4.  `settings`: global LiaScript Settings
+5.  `section_active`: section id to display
 6.  `state`: fragments, if animations are active, not visible in textbook mode
 
 -}
-view_nav : Int -> Bool -> Mode -> Lang -> Bool -> String -> Html Msg
-view_nav section_active hasIndex mode lang speaking state =
+view_nav : Maybe Event -> Lang -> Bool -> Setting.Model -> Int -> String -> Html Msg
+view_nav sharing lang hasIndex settings section_active state =
     Html.nav [ Attr.class "lia-toolbar", Attr.id "lia-toolbar-nav" ]
         [ Html.map UpdateSettings <| Settings.toggle_button_toc lang
         , if hasIndex then
@@ -189,7 +192,7 @@ view_nav section_active hasIndex mode lang speaking state =
         , Html.span [ Attr.class "lia-labeled lia-left", Attr.id "lia-label-section" ]
             [ Html.span
                 [ Attr.class "lia-label"
-                , if speaking then
+                , if settings.speaking then
                     Attr.style "text-decoration" "underline"
 
                   else
@@ -197,7 +200,7 @@ view_nav section_active hasIndex mode lang speaking state =
                 ]
                 [ Html.text (String.fromInt (section_active + 1))
                 , Html.text <|
-                    case mode of
+                    case settings.mode of
                         Textbook ->
                             ""
 
@@ -205,7 +208,15 @@ view_nav section_active hasIndex mode lang speaking state =
                             state
                 ]
             ]
-        , navButton "navigate_next" (Trans.baseNext lang) "lia-btn-next" NextSection
-        , Html.span [ Attr.class "lia-spacer", Attr.id "lia-spacer-right" ] []
-        , Html.map UpdateSettings <| Settings.switch_button_mode lang mode
+        , navButton "navigate_next"
+            (Trans.baseNext lang)
+            "lia-btn-next"
+            NextSection
+        , Html.span [ Attr.class "lia-spacer", Attr.id "lia-spacer-left" ] []
+        , Html.map UpdateSettings (Settings.switch_button_mode lang settings.mode)
+        , Html.span [ Attr.class "lia-spacer", Attr.id "lia-spacer-left" ] []
+        , Html.map UpdateSettings (Settings.buttonSettings lang settings)
+        , Html.map UpdateSettings (Settings.buttonInfo lang settings)
+        , Html.map UpdateSettings (Settings.buttonTranslation lang settings)
+        , Html.map UpdateSettings (Settings.buttonShare lang sharing settings)
         ]
