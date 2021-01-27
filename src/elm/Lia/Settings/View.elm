@@ -1,4 +1,13 @@
-module Lia.Settings.View exposing (design, switch_button_mode, toggle_button_toc, view)
+module Lia.Settings.View exposing
+    ( buttonInfo
+    , buttonSettings
+    , buttonShare
+    , buttonTranslation
+    , design
+    , switch_button_mode
+    , toggle_button_toc
+    , view
+    )
 
 import Array
 import Html exposing (Html)
@@ -24,18 +33,47 @@ view model url origin lang share defines =
         , qrCodeView model.buttons.share url
         , Html.div
             [ Attr.class "lia-settings", Attr.style "display" "inline-flex", Attr.style "width" "99%" ]
-            [ dropdown model.buttons.settings "settings" (Trans.confSettings lang) (Toggle <| Button Settings)
-            , dropdown model.buttons.informations "info" (Trans.confInformation lang) (Toggle <| Button Informations)
-            , dropdown model.buttons.translations "translate" (Trans.confTranslations lang) (Toggle <| Button Translations)
-            , dropdown model.buttons.share
-                "share"
-                (Trans.confShare lang)
-                (share
-                    |> Maybe.map ShareCourse
-                    |> Maybe.withDefault (Toggle <| Button Share)
-                )
+            [ buttonSettings lang model
+            , buttonInfo lang model
+            , buttonTranslation lang model
+            , buttonShare lang share model
             ]
         ]
+
+
+buttonSettings : Lang -> Model -> Html Msg
+buttonSettings lang model =
+    dropdown model.buttons.settings
+        "settings"
+        (Trans.confSettings lang)
+        (Toggle <| Button Settings)
+
+
+buttonInfo : Lang -> Model -> Html Msg
+buttonInfo lang model =
+    dropdown model.buttons.informations
+        "info"
+        (Trans.confInformation lang)
+        (Toggle <| Button Informations)
+
+
+buttonTranslation : Lang -> Model -> Html Msg
+buttonTranslation lang model =
+    dropdown model.buttons.translations
+        "translate"
+        (Trans.confTranslations lang)
+        (Toggle <| Button Translations)
+
+
+buttonShare : Lang -> Maybe Event -> Model -> Html Msg
+buttonShare lang share model =
+    dropdown model.buttons.share
+        "share"
+        (Trans.confShare lang)
+        (share
+            |> Maybe.map ShareCourse
+            |> Maybe.withDefault (Toggle <| Button Share)
+        )
 
 
 design : Model -> List (Html.Attribute msg)
@@ -73,7 +111,7 @@ dropdown active name alt msg =
         [ onClick msg
         , Attr.id <| "lia-btn-" ++ name
         , Attr.class <|
-            "lia-btn lia-icon"
+            "lia-btn lia-icon lia-right"
                 ++ (if active then
                         " lia-selected"
 
